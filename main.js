@@ -1,1282 +1,869 @@
-const { Telegraf, session, Extra, Markup, Scenes } = require('telegraf');
+const { Telegraf, session, Extra, Markup, Scenes} = require('telegraf');
 const { BaseScene, Stage } = Scenes
-const { enter, leave } = Stage
-const stage = new Stage()
-const rateLimit = require('telegraf-ratelimit');
 const mongo = require('mongodb').MongoClient;
-const axios = require('axios')
-const { token , admins , curr} = require('./details')
-const mongo_url = "mongodb+srv://Shiba786:Iamzaker786@cluster0.z5yy6.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
-const bot = new Telegraf(token);
+const {enter, leave} = Stage
+const stage = new Stage();
+// const Coinbase = require('coinbase');
+// const coinpayments = require('coinpayments');
 
-//Scenes Register 
+//const express = require('express')
+//var bodyParser = require('body-parser');
+//const crypto = require("crypto"); 
+//const app = express()
+//app.use(bodyParser.urlencoded({ extended: false }));
+const Scene = BaseScene
+//app.use(bodyParser.json());
+const data = require('./data');
+// const Client = require('coinbase').Client;
+let db 
 
-const getwallet = new BaseScene('getwallet')
-stage.register(getwallet)
-const onwith = new BaseScene('onwith')
-stage.register(onwith)
-const mini = new BaseScene('mini')
-stage.register(mini)
-const max = new BaseScene('max')
-stage.register(max)
-const tax = new BaseScene('tax')
-stage.register(tax)
-const mkey = new BaseScene('mkey')
-stage.register(mkey)
-const mid = new BaseScene('mid')
-stage.register(mid)
-const subid = new BaseScene('subid')
-stage.register(subid)
-const comment = new BaseScene('comment')
-stage.register(comment)
-const addcha = new BaseScene('addcha')
-stage.register(addcha)
-const rcha = new BaseScene('rcha')
-stage.register(rcha)
-const getref = new BaseScene('getref')
-stage.register(getref)
-const chabal = new BaseScene('chabal')
-stage.register(chabal)
-const getdetails = new BaseScene('getdetails')
-stage.register(getdetails)
-const paycha = new BaseScene('paycha')
-stage.register(paycha)
-const broad = new BaseScene('broad')
-stage.register(broad)
 
-function senderr(e){
-    try{
-        for (const i of admins){
-            bot.telegram.sendMessage(i,"*🥲 Wtf! Error Happened In Bot:\n\n"+e+"\n\nDon't Panic Bot Will Not Stop*",{parse_mode:'Markdown'})
-        }
-    }catch(err){
-        console.log(err)
-    }
-}
-
-const buttonsLimit = {
-    window: 1000,
-    limit: 1,
-    onLimitExceeded: (ctx, next) => {
-      if ('callback_query' in ctx.update)
-      ctx.answerCbQuery('😅 Please Dont Press Buttons Quikly , Try Again...', true)
-        .catch((err) => sendError(err, ctx))
-    },
-    keyGenerator: (ctx) => {
-      return ctx.callbackQuery ? true : false
-    }
+const  bot = new Telegraf(data.bot_token)
+mongo.connect(data.mongoLink, {useUnifiedTopology: true}, (err, client) => {
+  if (err) {
+    console.log(err)
   }
-  bot.use(rateLimit(buttonsLimit))
+
+  db = client.db('MetaJokerAirdropBot')
+  bot.telegram.deleteWebhook().then(success => {
+  success && console.log('🤖 is listening to your commands')
+  bot.launch()
+})
+})
 
 bot.use(session())
 bot.use(stage.middleware())
 
-let db;
+const onCheck = new Scene('onCheck')
+stage.register(onCheck)
+const onConfirm = new Scene('onConfirm')
+stage.register(onConfirm)
+const getWallet= new Scene('getWallet')
+stage.register(getWallet)
 
-mongo.connect(mongo_url, { useUnifiedTopology: true } , (err,client) =>{
-    if (err) {
-        console.log(err)
-    }
-    db = client.db(token.split(':')[0]);
-    bot.launch().then(console.log(' Bot Hosted On Server Try To Send /start')
-    )
-})
-//Just Main Menu Keyboard
-let mainkey = [
-    ['💰 Account','👫 Invite'],
-    ['📊 Statistics'],
-    ['🗂️ Wallet','💵 Withdraw']
-]
+const getMsg = new Scene('getMsg')
+stage.register(getMsg)
 
-const botstart = async (ctx) =>{
-    try{
-        bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if (!(admin.length)){
-            let botData = {admin:'admin',ref:1,mini:2,max:4,paycha:'@Username',botstat:'Active',withstat:'On',subid:'Not Set',mid:'NOT SET',mkey:'NOT SET',comment:'NOT SET',tax:0,channels:[]}
-            db.collection('admin').insertOne(botData)
-            ctx.replyWithMarkdown("*👀 Bot Data Saved In Database Try To Restart Bot /start*")
-            return
-        }
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let uData = await db.collection('info').find({user:ctx.from.id}).toArray()
-        if (!(uData.length)){
-            db.collection('withdraw').insertOne({user:ctx.from.id,'toWith':0})
-            db.collection('info').insertOne({user:ctx.from.id})
-            let ref = ctx.startPayload * 1
-            let rData = await db.collection('refer').find({user:ctx.from.id}).toArray()
-            if((ref) && ctx.from.id != ref && !('invited' in rData) && !(isNaN(ref))){
-                db.collection('refer').insertOne({user:ctx.from.id,'invited':ref})
-            }else{
-                db.collection('refer').insertOne({user:ctx.from.id,'invited':"None",'kid':true})
-            }
-        }
-        let text = "*🚧Share Your Contact Number To Verify Yourself\n\n*_⚠️We Will Not Share Your Personal Information To Someone_"
-        bot.telegram.sendMessage(ctx.from.id,text,{parse_mode:'Markdown',reply_markup:{keyboard:[[{text:"📤 Send Contact",request_contact:true}]],resize_keyboard: true}})
-    }catch(e){
-        console.log(e)
-senderr(e)
-    }
+const onWithdraw = new Scene('onWithdraw')
+stage.register(onWithdraw)
+
+const channels = data.channelsList
+const cb_api_key = data.cb_api_key
+const cb_api_secret = data.cb_api_secret
+const cb_account_id = data.cb_account_id
+const admin = data.bot_admin
+const bot_cur = data.currency
+const min_wd = data.min_wd
+const ref_bonus = data.reffer_bonus
+const daily_bonus = data.daily_bonus
+
+// var client = new Client({
+//    apiKey: cb_api_key,
+//    apiSecret: cb_api_secret ,strictSSL: false
+// });
+
+
+
+
+const botStart = async (ctx) => {
+try {
+
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+   let dbData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+ let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+
+let q1 = rndInt(1,10)
+let q2 = rndInt(1,10)
+let ans = q1+q2
+  
+  if(bData.length===0){
+  if(ctx.startPayload && ctx.startPayload != ctx.from.id){
+let ref = ctx.startPayload * 1
+  db.collection('pendUsers').insertOne({userId: ctx.from.id, inviter: ref})}else{
+db.collection('pendUsers').insertOne({userId: ctx.from.id})
 }
-bot.start(botstart)
+  
+  db.collection('allUsers').insertOne({userId: ctx.from.id, virgin: true, paid: false })
+   db.collection('balance').insertOne({userId: ctx.from.id, balance:0,withdraw:0})
+  db.collection('checkUsers').insertOne({userId: ctx.from.id, answer:ans})
+ await  ctx.replyWithMarkdown('➡️*Hi, before you start the bot, please prove you are human by answering the question below.*\nPlease answer: '+q1+' + '+q2+' =\n*Send your answer now*',  { reply_markup: { keyboard: [['⚪️ Try Again']], resize_keyboard: true } })
+ ctx.scene.enter('onCheck')
+ }else{
+  let joinCheck = await findUser(ctx)
+  if(joinCheck){
+  let pData = await db.collection('pendUsers').find({userId: ctx.from.id}).toArray()
+       if(('inviter' in pData[0]) && !('referred' in dbData[0])){
+   let bal = await db.collection('balance').find({userId: pData[0].inviter}).toArray()
+
+ var cal = bal[0].balance*1
+ var sen = ref_bonus*1
+ var see = cal+sen
+
+   bot.telegram.sendMessage(pData[0].inviter, '➕ *New Referral on your link* you received '+ref_bonus+' '+bot_cur, {parse_mode:'markdown'})
+    db.collection('allUsers').updateOne({userId: ctx.from.id}, {$set: {inviter: pData[0].inviter, referred: 'surenaa'}}, {upsert: true})
+     db.collection('joinedUsers').insertOne({userId: ctx.from.id, join: true})
+    db.collection('balance').updateOne({userId: pData[0].inviter}, {$set: {balance: see}}, {upsert: true})
+    ctx.replyWithMarkdown(
+      '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+      { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+      disable_web_page_preview : 'true'})      
+      }else{
+      db.collection('joinedUsers').insertOne({userId: ctx.from.id, join: true}) 
+
+      ctx.replyWithMarkdown(
+        '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+        { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+        disable_web_page_preview : 'true'})    }
+      }else{
+  mustJoin(ctx)
+  }}
 
 
-bot.on('contact',async (ctx) =>{
-    try{
-        bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-        var cont = ctx.update.message.contact.phone_number
-    if (ctx.update.message.forward_from){
-      bot.telegram.sendMessage(ctx.from.id,"*❌ Not Your Contact*",{parse_mode:"markdown"})
-      return
-    }
-    if(!(ctx.update.message.contact.first_name == ctx.from.first_name)){
-        ctx.replyWithMarkdown("*❌ Not Your Contact*")
-        return
-    }
-      if(!(ctx.message.reply_to_message)){
-        ctx.replyWithMarkdown("*❌ Not Your Contact*")
-        return
-    }
-    if(cont.startsWith("91") || cont.startsWith("+91")){
-        db.collection('info').updateOne({user:ctx.from.id},{$set:{verified:true}})
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let checkJoined = await joinCheck(ctx.from.id,admin)
-        if(!checkJoined){
-            sendJoined(ctx,admin)
-            return
-        }
-        let uData = await db.collection('refer').find({user:ctx.from.id}).toArray()
-        if (!('kid' in uData[0]) && ('invited' in uData[0])){
-            await db.collection('refer').updateOne({user:ctx.from.id},{$set:{'kid':true}})
-            let refid = uData[0].invited
-            let rData = await db.collection('info').find({user:refid}).toArray()
-            if(!(rData.length)){
-                db.collection('refer').updateOne({user:ctx.from.id},{$set:{'invited':'None'}})
-                ctx.replyWithMarkdown("*🚸 Wrong Refer Link *")
-                return
-            }
-            if (!('balance' in rData[0])){
-                var bal = 0;
-            }else{
-                var bal = rData[0].balance
-            }
-            let PerRef = admin[0].ref
-            let final = parseFloat(bal) + parseFloat(PerRef)
-            db.collection('info').updateOne({user:refid},{$set:{'balance':final}})
-            ctx.replyWithMarkdown("*🟢 You Are Referred By:*\n["+refid+"](tg://user?id="+refid+")")
-            bot.telegram.sendMessage(refid,"*💰 Refer Successfully Completed By:\t\t*["+ctx.from.id+"](tg://user?id="+ctx.from.id+")\n*Reward Added To Your Account*",{parse_mode:'Markdown'})
-        }
-        starter(ctx)
-    }
-    }catch(e){
-        console.log(e)
-senderr(e)
-    }
-})
-
-//Joined Button Code
-bot.hears('🟢 Joined', async (ctx)=>{
-    try{
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let checkJoined = await joinCheck(ctx.from.id,admin)
-        if(!checkJoined){
-            sendJoined(ctx,admin)
-            return
-        }
-        let data = await db.collection('info').find({user:ctx.from.id}).toArray()
-
-        if (!('verified' in data[0])){
-
-            botstart(ctx)
-
-            return
-
-        }
-        let uData = await db.collection('refer').find({user:ctx.from.id}).toArray()
-        if (!('kid' in uData[0]) && ('invited' in uData[0])){
-            await db.collection('refer').updateOne({user:ctx.from.id},{$set:{'kid':true}})
-            let refid = uData[0].invited
-            let rData = await db.collection('info').find({user:refid}).toArray()
-            if(!(rData.length)){
-                db.collection('refer').updateOne({user:ctx.from.id},{$set:{'invited':'None'}})
-                ctx.replyWithMarkdown("*🚸 Wrong Refer Link *")
-                return
-            }
-            if (!('balance' in rData[0])){
-                var bal = 0;
-            }else{
-                var bal = rData[0].balance
-            }
-            let PerRef = admin[0].ref
-            let final = parseFloat(bal) + parseFloat(PerRef)
-            db.collection('info').updateOne({user:refid},{$set:{'balance':final}})
-            ctx.replyWithMarkdown("*🟢 You Are Referred By:*\n["+refid+"](tg://user?id="+refid+")")
-            bot.telegram.sendMessage(refid,"*💰 Refer Successfully Completed By:\t\t*["+ctx.from.id+"](tg://user?id="+ctx.from.id+")\n*Reward Added To Your Account*",{parse_mode:'Markdown'})
-        }
-        starter(ctx)
-    }catch(e){
-        console.log(e)
-senderr(e)
-
-    }
-})
-
-//Account Info Button Code
-bot.hears('💰 Account' , async (ctx) =>{
-    try{
-        bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let data = await db.collection('info').find({user:ctx.from.id}).toArray()
-        if (!('verified' in data[0])){
-            botstart(ctx)
-            return
-        }
-        let checkJoin = await joinCheck(ctx.from.id,admin)
-        if(!checkJoin){
-            sendJoined(ctx,admin)
-            return
-        }
-        if (!('balance' in data[0])){
-            var bal =0;
-        }else{
-            var bal = data[0].balance
-        }
-        if (!('wallet' in data[0])){
-            var wallet = 'None'
-        }else{
-            var wallet = data[0].wallet
-        }
-        let text = "*💁User = "+ctx.from.first_name+"\n\n💰 Your Balance = "+bal.toFixed(3)+" "+curr+"\n\n🗂️Wallet = *`"+wallet+"`"
-        ctx.replyWithMarkdown(text)
-    }catch(e){
-        console.log(e)
-senderr(e)
-    }
-})
-
-//Invite Button Code
-bot.hears('👫 Invite', async (ctx)=>{
-    try{
-        bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let data = await db.collection('info').find({user:ctx.from.id}).toArray()
-        if (!('verified' in data[0])){
-            botstart(ctx)
-            return
-        }
-        let checkJoin = await joinCheck(ctx.from.id,admin)
-        if(!checkJoin){
-            sendJoined(ctx,admin)
-            return
-        }
-        let text = "*🙌  User = "+ctx.from.first_name+"\n\n🙌 Refer Link = https://t.me/"+bot.botInfo.username+"?start="+ctx.from.id+"\n\n🚀 Invite And Earn: "+admin[0].ref.toFixed(3)+" "+curr+" *"
-        ctx.replyWithMarkdown(text)
-    }catch(e){
-        console.log(e)
-senderr(e)
-    }
-})
-
-bot.hears('📊 Statistics',async (ctx) =>{
-    try{
-        bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let data = await db.collection('info').find({user:ctx.from.id}).toArray()
-        if (!('verified' in data[0])){
-            botstart(ctx)
-            return
-        }
-        let checkJoin = await joinCheck(ctx.from.id,admin)
-        if(!checkJoin){
-            sendJoined(ctx,admin)
-            return
-        }
-        let users = await db.collection('info').find({},{projection:{user:1,'_id':0}}).toArray()
-        let payout = await db.collection('admin').find({Payout:'Payout'}).toArray()
-        if(payout.length == 0){
-            var final = 0;
-        }else{
-            var final = payout[0].value
-        }
-        //
-        let text = "*📊Bot Live Status Here\n\n📤 Total Payouts: "+final.toFixed(3)+" "+curr+"\n\n🙇 Total Users: "+users.length+" Users\n\n✅ Made By* [Your name](https://t.me/your_id)"
-        ctx.replyWithMarkdown(text)
-    }catch(e){
-        senderr(e)
-        console.log(e)
-    }
-})
-
-//Wallet Button Code
-bot.hears('🗂️ Wallet', async (ctx) =>{
-    try{
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if(ctx.message.chat.type != 'private'){
-            return
-        }
-        let botstat = admin[0].botstat
-        if (botstat != 'Active'){
-            ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-            return
-        }
-        let data = await db.collection('info').find({user:ctx.from.id}).toArray()
-        if (!('verified' in data[0])){
-            botstart(ctx)
-            return
-        }
-        let checkJoin = await joinCheck(ctx.from.id,admin)
-        if(!checkJoin){
-            sendJoined(ctx,admin)
-            return
-        }
-        ctx.replyWithMarkdown("*💡 Send Your Paytm Number*",{reply_markup:{keyboard:[
-            ['🔙 Back']
-        ],resize_keyboard:true}})
-        await ctx.scene.enter('getwallet')
-    }catch(e){
-        senderr(e)
-        console.log(e)
-    }
-})
-
-//Set Wallet Scene
-getwallet.on('text', async (ctx) =>{
-    try{
-        const name = 'getwallet'
-        if (ctx.message.text == '🔙 Back'){
-            starter(ctx)
-            await ctx.scene.leave(name)
-            return
-        }else if(isNaN(ctx.message.text)){
-            ctx.replyWithMarkdown("*🚫 Not A Valid Paytm Number*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        }else if(ctx.message.text.length != 10){
-            ctx.replyWithMarkdown("*🚫 Not A Valid Paytm Number*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        }else{
-            db.collection('info').updateOne({user:ctx.from.id},{$set:{'wallet':ctx.message.text}})
-            ctx.replyWithMarkdown("*✅ Your Paytm Number Updated To "+ctx.message.text+"*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-        }
-    }catch(e){
-        senderr(e)
-        console.log(e)
-    }
-})
-
-//Withdraw Button Code
-bot.hears('💵 Withdraw',async (ctx) =>{
-    try{
-    bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => console.log(err))
-    let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-    if(ctx.message.chat.type != 'private'){
-        return
-    }
-    let botstat = admin[0].botstat
-    if (botstat != 'Active'){
-        ctx.replyWithMarkdown('*⛔ Currently Bot Is Under Maintenance*')
-        return
-    }
-    let withstat = admin[0].withstat
-    if(withstat != 'On'){
-        ctx.replyWithMarkdown('*⛔ Currently Withdrawls Are Not Avaible*')
-        return
-    }
-    let data = await db.collection('info').find({user:ctx.from.id}).toArray()
-    if (!('verified' in data[0])){
-        botstart(ctx)
-        return
-    }
-    let checkJoin = await joinCheck(ctx.from.id,admin)
-    if(!checkJoin){
-        sendJoined(ctx,admin)
-        return
-    }
-    if(!('balance' in data[0])){
-        var bal = 0;
-    }else{
-        var bal = data[0].balance
-    }
-    let mini = admin[0].mini
-    if (parseFloat(bal) < parseFloat(mini)){
-        ctx.replyWithMarkdown('*⚠️ Must Own AtLeast '+mini.toFixed(3)+' '+curr+'*')
-        return
-    }
-    if(!('wallet' in data[0])){
-        ctx.replyWithMarkdown('*⛔️ Paytm Number Not Set*')
-        return
-    }
-    ctx.replyWithMarkdown("*💡 Send Amount To Withdraw*",{reply_markup:{keyboard:[
-        ['🔙 Back']
-    ],resize_keyboard:true}})
-    await ctx.scene.enter('onwith')
-    }catch(e){
-        senderr(e)
-        console.log(e)
-    }
-})
-
-onwith.on('text',async (ctx) =>{
-    try{
-        const name = 'onwith'
-        var admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        var data = await db.collection('info').find({user:ctx.from.id}).toArray()
-        let mini = admin[0].mini
-        if (ctx.message.text == '🔙 Back'){
-            starter(ctx)
-            await ctx.scene.leave(name)
-            return
-        }else if(isNaN(ctx.message.text)){
-            ctx.replyWithMarkdown("*🚫 Not A Valid Amount*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        
-        }else if(parseFloat(mini) > parseFloat(ctx.message.text)){
-            ctx.replyWithMarkdown("*⚠️ Minimum Withdraw Is "+mini+" "+curr+"*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        }else if(parseFloat(ctx.message.text) > parseFloat(data[0].balance)){
-            ctx.replyWithMarkdown("*⚠️ You Did Not Have Enough Balance*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        }else if(parseFloat(ctx.message.text) > parseFloat(admin[0].max)){
-            ctx.replyWithMarkdown("*⛔️ Maximum Withdraw Is "+admin[0].max+" "+curr+"*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        } else if (ctx.message.forward_from){
-            ctx.replyWithMarkdown("*🚫 Forwards Not Allowed*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            await ctx.scene.leave(name)
-            return
-        } else{
-            await ctx.scene.leave(name)
-            await db.collection('withdraw').updateOne({user:ctx.from.id},{$set:{'toWith':parseFloat(ctx.message.text)}})
-            let text = "*🚨 Withdrawal Request Confirmation\n\n💰 Amount: "+ctx.message.text+" "+curr+"\n🗂️Paytm Number:* `"+data[0].wallet+"`*\n\n🟢Click On '✅ Continue' To Confirm*"
-            ctx.replyWithMarkdown(text,{reply_markup:{inline_keyboard:[
-                [{text:'✅ Continue',callback_data:'continue'},{text:'⛔️ Reject',callback_data:'reject'}]
-            ]}})            
-        }
-    }catch(e){
-        senderr(e)
-        console.log(e)
-    }
-})
-
-bot.action('reject', async (ctx) =>{
-    try{
-        await db.collection('withdraw').updateOne({user:ctx.from.id},{$set:{'toWith':0}})
-        await ctx.deleteMessage()
-        ctx.replyWithMarkdown("*🚫 Withdrawal Cancelled*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-    }catch(e){
-        console.log(e)
-        senderr(e)
-    }
-})
-
-bot.action('continue',async (ctx) =>{
-    try{
-        await ctx.deleteMessage()  
-        let wData = await db.collection('withdraw').find({user:ctx.from.id}).toArray()
-        await db.collection('withdraw').updateOne({user:ctx.from.id},{$set:{'toWith':0}})      
-        var toWith = wData[0].toWith * 1
-        if(toWith == 0){            
-            ctx.replyWithMarkdown("*❌No Amount Available For Withdrawal*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            return
-        }
-        let uData = await db.collection('info').find({user:ctx.from.id}).toArray()
-        var bal = uData[0].balance * 1
-        if(bal < toWith){
-            ctx.replyWithMarkdown("*❌Withdrawal Failed*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            return
-        }
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let tax = admin[0].tax * 1 
-        let finalamo = (toWith/100) * tax
-        let amo =  parseFloat(toWith - finalamo)
-        let swg = admin[0].subid
-        let mkey = admin[0].mkey 
-        let mid = admin[0].mid 
-        let comment = admin[0].comment 
-        let wallet = uData[0].wallet
-        var finalBal = parseFloat(bal) - parseFloat(toWith)
-        db.collection('info').updateOne({user:ctx.from.id},{$set:{'balance':finalBal}})
-        var url = 'https://job2all.xyz/api/index.php?mid='+mid+'&mkey='+mkey+'&guid='+swg+'&mob='+wallet+'&amount='+amo.toString()+'&info='+comment;
-        var res = await axios.post(url)
-        if (res.data == "Payment Succesful Transfer\n\n\n"){
-            var text = "*🟢 Withdraw Request Processed 🟢\n\n💰 Amount: "+toWith+" "+curr+" (Tax : %"+tax+")\n🗂️ Paytm Wallet: *`"+wallet+"`"
-            var payText = "*🟢 Withdraw Request Processed 🟢\n👷 User: *["+ctx.from.id+"](tg://user?id="+ctx.from.id+")*\n\n💰 Amount: "+toWith+" "+curr+" (Tax : %"+tax+")\n🗂️ Paytm Wallet: *`"+wallet+"`\n\n*🟢 Bot: @"+ctx.botInfo.username+"*"
-        }else{
-            var payText = "*🚫 Withdrawal Request Failed\n\n👷 User: *["+ctx.from.id+"](tg://user?id="+ctx.from.id+")*\n\n💰 Amount: "+toWith+" "+curr+" (Tax : %"+tax+")\n🗂️ Paytm Wallet: *`"+wallet+"`*\n\n⛔️ Reason: *`"+res.data+"`"
-            var text = "*🚫 Withdrawal Request Failed\n⛔️ Reason: *`"+res.data+"`"
-        }
-        ctx.replyWithMarkdown(text,{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        bot.telegram.sendMessage(admin[0].paycha,payText,{parse_mode:'Markdown'}).catch(e => console.log(e.response.description))
-        let pData = await db.collection('admin').find({Payout:'Payout'}).toArray()
-        if(!pData.length){
-            var TPay = 0;
-            db.collection('admin').insertOne({Payout:'Payout',value:TPay})
-        }else{
-            var TPay = pData[0].value
-        }
-        var finalPay = parseFloat(toWith) + parseFloat(TPay)
-        db.collection('admin').updateOne({Payout:'Payout'},{$set:{value:finalPay}})
-
-
-    }catch(e){
-
-    }
-})
-
-
-
-//Minimum Withdraw Scene
-mini.on('text', async (ctx) =>{
-    try{
-        const name = 'mini'
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let tax = admin[0].tax
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        } else if (isNaN(ctx.message.text)){
-            ctx.replyWithMarkdown(
-                '*⛔ Enter A Valid Amount*', { reply_markup: { keyboard:mainkey, resize_keyboard: true } }
-            )
-        
-        }else{
-            let finalamo = (parseFloat(ctx.message.text)/100) * tax
-            let amo =  parseFloat(parseFloat(ctx.message.text) - finalamo)
-            if(amo < 1){
-                ctx.replyWithMarkdown(
-                    '*⛔ Please Increase Minimum Withdraw Or Decrease Tax*', { reply_markup: { keyboard:mainkey, resize_keyboard: true } }
-                )
-                
-            }else{
-                db.collection('admin').updateOne({admin:'admin'},{$set:{mini: parseFloat(ctx.message.text)}})
-            ctx.replyWithMarkdown(
-                '*✅ Minimum Withdraw Updated To '+ctx.message.text+'*', { reply_markup: { keyboard: mainkey, resize_keyboard: true } }
-            )
-            }
-        }
-        ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Maximum Withraw Scene
-max.on('text', async (ctx) =>{
-    try{
-        const name = 'max'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        } else if (isNaN(ctx.message.text)){
-            ctx.replyWithMarkdown(
-                '*⛔ Enter A Valid Amount*', { reply_markup: { keyboard:mainkey, resize_keyboard: true } }
-            )
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{max: parseFloat(ctx.message.text)}})
-            ctx.replyWithMarkdown(
-                '*✅ Maximum Withdraw Updated To '+ctx.message.text+'*', { reply_markup: { keyboard: mainkey, resize_keyboard: true } }
-            )
-        }
-        ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Refer Bonus Scene
-getref.on('text', async (ctx) =>{
-    try{
-        const name = 'getref'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        } else if (isNaN(ctx.message.text)){
-            ctx.replyWithMarkdown(
-                '*⛔ Enter A Valid Amount*', { reply_markup: { keyboard:mainkey, resize_keyboard: true } }
-            )
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{ref: parseFloat(ctx.message.text)}})
-            ctx.replyWithMarkdown(
-                '*✅ Refer Bonus Updated To '+ctx.message.text+'*', { reply_markup: { keyboard: mainkey, resize_keyboard: true } }
-            )
-        }
-        ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-
-//Tax Withdraw Scene
-tax.on('text', async (ctx) =>{
-    try{
-        const name = 'tax'
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        const mini = admin[0].mini
-        const tax = parseFloat(ctx.message.text)
-        let finalamo = (mini/100) * tax
-        let amo =  parseFloat(mini - finalamo)
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        } else if (isNaN(ctx.message.text)){
-            ctx.replyWithMarkdown(
-                '*⛔ Enter A Valid Amount*', { reply_markup: { keyboard:mainkey, resize_keyboard: true } }
-            )
-        }else if(amo < 1){
-            ctx.replyWithMarkdown(
-                '*⛔ ⛔ Please Increase Minimum Withdraw Or Decrease Tax*', { reply_markup: { keyboard:mainkey, resize_keyboard: true } }
-            )
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{tax: ctx.message.text}})
-            ctx.replyWithMarkdown(
-                '*✅ Withdraw Tax Updated To '+ctx.message.text+'%*', { reply_markup: { keyboard: mainkey, resize_keyboard: true } }
-            )
-        }
-        ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Subwallet id Scene
-subid.on('text',async (ctx)=>{
-    try{
-        const name = 'subid'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{subid:ctx.message.text}})
-            ctx.replyWithMarkdown("*✅ Subwallet Id Updated To *`"+ctx.message.text+"`", { reply_markup: { keyboard: mainkey, resize_keyboard: true } })
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Merchant id Scene
-mid.on('text',async (ctx)=>{
-    try{
-        const name = 'mid'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{mid:ctx.message.text}})
-            ctx.replyWithMarkdown("*✅ Merchant Id Updated To *`"+ctx.message.text+"`", { reply_markup: { keyboard: mainkey, resize_keyboard: true } })
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Merchant Key Scene
-mkey.on('text',async (ctx)=>{
-    try{
-        const name = 'mid'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{mkey:ctx.message.text}})
-            ctx.replyWithMarkdown("*✅ Merchant Key Updated To *`"+ctx.message.text+"`", { reply_markup: { keyboard: mainkey, resize_keyboard: true } })
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Pay Comment Scene
-comment.on('text',async (ctx)=>{
-    try{
-        const name = 'comment'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{comment:ctx.message.text}})
-            ctx.replyWithMarkdown("*✅ Comment Updated To *`"+ctx.message.text+"`", { reply_markup: { keyboard: mainkey, resize_keyboard: true } })
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Payment Channel Scene
-paycha.on('text',async (ctx) =>{
-    try{
-        const name = 'paycha'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else if(ctx.message.text.split('')[0] != '@'){
-            ctx.replyWithMarkdown("*⛔ Channel Username Must Start With @*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }else{
-            db.collection('admin').updateOne({admin:'admin'},{$set:{paycha:ctx.message.text}})
-            ctx.replyWithMarkdown("*✅ Payment Channel Updated To "+ctx.message.text+"*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Add Channel Scene
-addcha.on('text',async (ctx) =>{
-    try{
-        const name = 'addcha'
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else if(ctx.message.text.split('')[0] != '@'){
-            ctx.replyWithMarkdown("*⛔ Channel Username Must Start With @*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }else{
-            let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-            let oldCha = admin[0].channels
-            oldCha.push(ctx.message.text)
-            db.collection('admin').updateOne({admin:'admin'},{$set:{channels:oldCha}})
-            ctx.replyWithMarkdown("*✅ "+ctx.message.text+" Added To Our Database*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Remove Channel Scene
-rcha.on('text',async (ctx) =>{
-    try{
-        const name = 'rcha'
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let oldCha = admin[0].channels
-        if (ctx.message.text == '🔙 Back') {
-            starter(ctx)
-        }else if(ctx.message.text.split('')[0] != '@'){
-            ctx.replyWithMarkdown("*⛔ Channel Username Must Start With @*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }else if(!(contains(ctx.message.text,oldCha))){
-            ctx.replyWithMarkdown("*⛔ Channel Not Found In Database*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }else{
-            let newCha = await arrayRemove(oldCha,ctx.message.text)
-            db.collection('admin').updateOne({admin:'admin'},{$set:{channels:newCha}})
-            ctx.replyWithMarkdown("*✅ "+ctx.message.text+" Removed From Our Database*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }
-        await ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//Change Balance Scene
-chabal.on('text',async (ctx)=>{
-    try{
-        const name = 'chabal'
-        const msg = ctx.message.text
-        var id = msg.split(' ')[0]
-        var amo2 = msg.split(' ')[1]
-        if (msg == '🔙 Back') {
-            starter(ctx)
-        }else if(id == undefined || amo2 == undefined){
-            ctx.replyWithMarkdown("*⚠️Please Provide Telegram Id Or Amount*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }else if(isNaN(id) || isNaN(amo2)){
-            ctx.replyWithMarkdown("*🚫 Not Valid Amount Or Telegram id*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-        }else{
-            var amo = parseFloat(amo2);
-            var id2 = parseInt(id)
-            let data = await db.collection('info').find({user:id2}).toArray()
-            if(!(data.length)){
-                ctx.replyWithMarkdown("*⛔User Not Found In Our Database*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            }else{
-                if(!('balance' in data[0])){
-                    var bal = 0;
-                }else{
-                    var bal = data[0].balance
-                }
-                var final = parseFloat(bal) + amo
-                db.collection('info').updateOne({user:id2},{$set:{'balance':final}})
-                bot.telegram.sendMessage(id2,"*💰 Admin Changed Your Balance To "+final.toFixed(3)+" "+curr+"*",{parse_mode:"Markdown"})
-                ctx.replyWithMarkdown("*✅ Balance Updated Final Balance: "+final+" "+curr+"*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            }
-        }
-        ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-//User Details Scene
-getdetails.on('text',async (ctx) =>{
-    try{
-        const name = 'getdetails'
-        const msg = ctx.message.text
-        if (msg == '🔙 Back') {
-            starter(ctx)
-        }else{
-            let data = await db.collection('info').find({user:parseInt(ctx.message.text)}).toArray()
-            if(!(data.length)){
-                ctx.replyWithMarkdown("*⛔User Not Found In Our Database*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            }else{
-                if(!('balance' in data[0])){
-                    var bal = 0;
-                }else{
-                    var bal = data[0].balance
-                }
-                if(!('wallet' in data[0])){
-                    var wallet = 'NOT SET'
-                }else{
-                    var wallet = data[0].wallet;
-                }
-                let rData = await db.collection('refer').find({user:parseInt(ctx.message.text)}).toArray()
-                var invited = rData[0].invited
-                var text = "*🐥 User: *["+ctx.message.text+"](tg://user?id="+ctx.message.text+")\n\n*💰 Balance: "+bal.toFixed(3)+" "+curr+"\n🗂️ Paytm Number: *`"+wallet+"`\n*👫 Invited By: *`"+invited+"`"
-                ctx.replyWithMarkdown(text,{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-            }
-        }
-        ctx.scene.leave(name)
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.command('panel',async (ctx) =>{
-    try{
-        if(!(admins.includes(ctx.from.id))){
-            return
-        }
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let ref = admin[0].ref
-        let mini = admin[0].mini
-        let max = admin[0].max
-        let tax = admin[0].tax
-        var data = admin;
-        let botstat = admin[0].botstat
-    let withstat = admin[0].withstat
-    if (botstat = 'Active'){
-        var bot_button = "✅ Active"
-    }else{
-        var bot_button = "⛔️ Disable"
-    }
-    if(withstat = 'On'){
-        var with_button = "✅ On"
-    }else{
-        var with_button = "⛔️ Off"
-    }
-    let mid = admin[0].mid
-    let mkey = admin[0].mkey
-    let subid = admin[0].subid
-    if (mid == 'NOT SET' || mkey == 'NOT SET' || subid == 'Not Set'){
-        var key_button = "❌ NOT SET"
-    }else{
-        var key_button = "✅ SET"
-    }
-    var inline = [
-        [{text:'💰 Refer',callback_data:'change_ref'},{text:'💰 Minimum',callback_data:'change_mini'}],
-        [{text:'🚨 Change Tax',callback_data:'change_tax'},{text:'💰 Maximum',callback_data:'change_max'}],
-        [{text:'🌲Change Channels',callback_data:'change_cha'}],
-        [{text:'🛑Change Balance',callback_data:'change_balance'},{text:'🧾Get Details',callback_data:'get_details'}],
-        [{text:'✏️ Paytm Keys:'+key_button+'',callback_data:'paytm_key'}],
-        [{text:'🟢Bot:'+bot_button+'',callback_data:'bot_status'},{text:'🟢Withdraw:'+with_button+'',callback_data:'with_status'}]
-    ]
-    let text = "*👋 Hey "+ctx.from.first_name+"\n🤘🏻Welcome To Admin Panel\n\n💡 Bot Current Stats:\n\t\t\t\t💰 Per Refer: "+ref.toFixed(3)+" "+curr+"\n\t\t\t\t💰 Minimum Withdraw: "+mini.toFixed(3)+" "+curr+"\n\t\t\t\t💰 Maximum Withdraw: "+max.toFixed(3)+" "+curr+"\n\t\t\t\t🚨 Tax: %"+tax+"\n\t\t\t\t🤖 Bot Status:"+bot_button+"\n\t\t\t\t📤 Withdrawals:"+with_button+"*"
-        ctx.replyWithMarkdown(text,{reply_markup:{inline_keyboard:inline}})
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('change_ref',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown("*💡 Enter New Refer Bonus Amount*",{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('getref')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('change_mini',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown("*💡 Enter New Minimum Withdraw Amount*",{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('mini')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('change_max',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown("*💡 Enter New Maximum Withdraw Amount*",{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('max')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('change_tax',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown("*💡 Enter Withdraw Tax Amount Without %*",{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('tax')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('change_balance',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown('*💡 Send User Telegram Id & Amount\n\n⚠️ Use Format : *`' + ctx.from.id + ' 10`',{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('chabal')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('get_details',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown("*💡 Send User Telegram Id *",{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('getdetails')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('bot_status', async (ctx) =>{
-    try{
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        if(admin[0].botstat == 'Active'){
-            db.collection('admin').updateOne({admin:'admin'},{$set:{botstat:'Disable'}})
-            var bot_button = "⛔️ Disable"
-        }else{
-            var bot_button = "✅ Active"
-            db.collection('admin').updateOne({admin:'admin'},{$set:{botstat:'Active'}})
-        }
-        var data = admin;
-        let ref = admin[0].ref
-        let mini = admin[0].mini
-        let max = admin[0].max
-        let tax = admin[0].tax
-        let withstat = admin[0].withstat
-        if(withstat = 'On'){
-            var with_button = "✅ On"
-        }else{
-            var with_button = "⛔️ Off"
-        }
-        let mid = data[0].mid
-        let mkey = data[0].mkey
-        let subid = data[0].subid
-        if (mid == 'NOT SET' || mkey == 'NOT SET' || subid == 'Not Set'){
-            var key_button = "❌ NOT SET"
-        }else{
-            var key_button = "✅ SET"
-        }
-        var inline = [
-            [{text:'💰 Refer',callback_data:'change_ref'},{text:'💰 Minimum',callback_data:'change_mini'}],
-            [{text:'🚨 Change Tax',callback_data:'change_tax'},{text:'💰 Maximum',callback_data:'change_max'}],
-            [{text:'🌲Change Channels',callback_data:'change_cha'}],
-            [{text:'🛑Change Balance',callback_data:'change_balance'},{text:'🧾Get Details',callback_data:'get_details'}],
-            [{text:'✏️ Paytm Keys:'+key_button+'',callback_data:'paytm_key'}],
-            [{text:'🟢Bot:'+bot_button+'',callback_data:'bot_status'},{text:'🟢Withdraw:'+with_button+'',callback_data:'with_status'}]
-        ]
-        let text = "*👋 Hey "+ctx.from.first_name+"\n🤘🏻Welcome To Admin Panel\n\n💡 Bot Current Stats:\n\t\t\t\t💰 Per Refer: "+ref.toFixed(3)+" "+curr+"\n\t\t\t\t💰 Minimum Withdraw: "+mini.toFixed(3)+" "+curr+"\n\t\t\t\t💰 Maximum Withdraw: "+max.toFixed(3)+" "+curr+"\n\t\t\t\t🚨 Tax: %"+tax+"\n\t\t\t\t🤖 Bot Status:"+bot_button+"\n\t\t\t\t📤 Withdrawals:"+with_button+"*"
-        ctx.editMessageText(text,{reply_markup:{inline_keyboard:inline},parse_mode:'Markdown'})
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('with_status', async (ctx) =>{
-    try{
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let botstat = admin[0].botstat
-        let withstat = admin[0].withstat
-        if(withstat == 'On'){
-            db.collection('admin').updateOne({admin:'admin'},{$set:{withstat:'Off'}})
-            var with_button = "⛔️ Off"
-        }else{
-            var with_button = "✅ On"
-            db.collection('admin').updateOne({admin:'admin'},{$set:{withstat:'On'}})
-        }
-        var data = admin;
-        let ref = admin[0].ref
-        let mini = admin[0].mini
-        let max = admin[0].max
-        let tax = admin[0].tax        
-        if (botstat = 'Active'){
-            var bot_button = "✅ Active"
-        }else{
-            var bot_button = "⛔️ Disable"
-        }
-        let mid = data[0].mid
-        let mkey = data[0].mkey
-        let subid = data[0].subid
-        if (mid == 'NOT SET' || mkey == 'NOT SET' || subid == 'Not Set'){
-            var key_button = "❌ NOT SET"
-        }else{
-            var key_button = "✅ SET"
-        }
-        var inline = [
-            [{text:'💰 Refer',callback_data:'change_ref'},{text:'💰 Minimum',callback_data:'change_mini'}],
-            [{text:'🚨 Change Tax',callback_data:'change_tax'},{text:'💰 Maximum',callback_data:'change_max'}],
-            [{text:'🌲Change Channels',callback_data:'change_cha'}],
-            [{text:'🛑Change Balance',callback_data:'change_balance'},{text:'🧾Get Details',callback_data:'get_details'}],
-            [{text:'✏️ Paytm Keys:'+key_button+'',callback_data:'paytm_key'}],
-            [{text:'🟢Bot:'+bot_button+'',callback_data:'bot_status'},{text:'🟢Withdraw:'+with_button+'',callback_data:'with_status'}]
-        ]
-        let text = "*👋 Hey "+ctx.from.first_name+"\n🤘🏻Welcome To Admin Panel\n\n💡 Bot Current Stats:\n\t\t\t\t💰 Per Refer: "+ref.toFixed(3)+" "+curr+"\n\t\t\t\t💰 Minimum Withdraw: "+mini.toFixed(3)+" "+curr+"\n\t\t\t\t💰 Maximum Withdraw: "+max.toFixed(3)+" "+curr+"\n\t\t\t\t🚨 Tax: %"+tax+"\n\t\t\t\t🤖 Bot Status:"+bot_button+"\n\t\t\t\t📤 Withdrawals:"+with_button+"*"
-        ctx.editMessageText(text,{reply_markup:{inline_keyboard:inline},parse_mode:'Markdown'})
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('change_cha',async (ctx) =>{
-    try{
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let channel = admin[0].channels
-        let text = "*🌲 Currenly Set Channels:\n"
-        if (!(channel.length)){
-            text += "⛔️ No Any Channels Added"
-        }
-        for (i in channel){
-            let cha = channel[i]
-            text += "\t\t\t\t"+cha+"\n"
-        }
-        text += "\n\n➡️ Payout Channel: "+admin[0].paycha+"*"
-        var inline = [
-            [{text:'➕ Add Channel',callback_data:"add_cha"},{text:'➖ Remove Channel',callback_data:'r_cha'}],
-            [{text:'📤 Payout Channel',callback_data:'pay_cha'}]
-        ]
-        ctx.editMessageText(text,{reply_markup:{inline_keyboard:inline},parse_mode:'Markdown'})
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('add_cha',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown('*💡 Send Username Of Channel*',{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('addcha')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('r_cha',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown('*💡 Send Username Of Channel*',{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('rcha')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('pay_cha',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.replyWithMarkdown('*💡 Send Username Of Channel*',{reply_markup:{keyboard:[['🔙 Back']],resize_keyboard:true}})
-        ctx.scene.enter('paycha')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('paytm_key',async (ctx) =>{
-    try{
-        let admin = await db.collection('admin').find({admin:'admin'}).toArray()
-        let text = "*✏️ Your Paytm Keys: \n\n🗝️ Subwallet Guid : *`"+admin[0].subid+"`\n*🗝️ Merchant Key: *`"+admin[0].mkey+"`\n*🗝️ Merchant Id : *`"+admin[0].mid+"`\n*💬 Comment : *`"+admin[0].comment+"`"
-        var inline = [
-            [{text:"🔐 SUBWALLET ID",callback_data:'subid'},{text:"🔐 MERCHANT KEY",callback_data:'mkey'}],
-            [{text:"🔐 MERCHANT ID",callback_data:'mid'},{text:"💬 Payment Comment",callback_data:'pay_comment'}]
-        ]
-        ctx.editMessageText(text,{parse_mode:"Markdown",reply_markup:{inline_keyboard:inline}})
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('pay_comment',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.reply(
-            '*💡 Send Your Description For Payment*', { parse_mode: 'markdown', reply_markup: { keyboard: [['🔙 Back']], resize_keyboard: true } }
-        )
-        ctx.scene.enter('comment')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('mid',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.reply(
-            '*💡 Send Your Merchant ID*', { parse_mode: 'markdown', reply_markup: { keyboard: [['🔙 Back']], resize_keyboard: true } }
-        )
-        ctx.scene.enter('mid')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('mkey',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.reply(
-            '*💡 Send Your Merchant Key*', { parse_mode: 'markdown', reply_markup: { keyboard: [['🔙 Back']], resize_keyboard: true } }
-        )
-        ctx.scene.enter('mkey')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-bot.action('subid',(ctx) =>{
-    try{
-        ctx.deleteMessage()
-        ctx.reply(
-            '*💡 Send Your Subwallet Id*', { parse_mode: 'markdown', reply_markup: { keyboard: [['🔙 Back']], resize_keyboard: true } }
-        )
-        ctx.scene.enter('subid')
-    }catch(e){
-        senderr(e)
-    }
-})
-
-broad.on('text',async (ctx) =>{
-    let uData = await db.collection('info').find({},{projection:{user:1,'_id':0}}).toArray()
-    let msg = ctx.message.text
-    if (msg == '🔙 Back') {
-            starter(ctx)
-            ctx.scene.leave('broad')
-            return
-     }
-    ctx.replyWithMarkdown("*✅ Broadcast Sended To All Users*",{reply_markup:{keyboard:mainkey,resize_keyboard:true}})
-    for (var i of uData){
-       bot.telegram.sendMessage(i.user,"*🔈 Broadcast By Admin*\n\n"+msg+"",{parse_mode:"Markdown",disable_web_page_preview:true}).catch(e => console.log(e))
-    }
-    ctx.scene.leave('broad')
-
-})
-
-bot.command('broadcast',async (ctx) =>{
-    if(!(admins.includes(ctx.from.id))){
-        return
-    }
-    ctx.reply(
-        '*💡 Send Message To Send Broadcast*', { parse_mode: 'markdown', reply_markup: { keyboard: [['🔙 Back']], resize_keyboard: true } }
-    )
-    await ctx.scene.enter('broad')
-})
-
-async function starter(ctx){
-    var text = "*👋 Welcome To Main Menu*"
-    ctx.replyWithMarkdown(text,{reply_markup:{keyboard:mainkey, resize_keyboard: true }})
+} catch(e){
+sendError(e, ctx)
+}
 }
 
-async function sendJoined(ctx,data){
-    try{
-        let channels = data[0].channels
-        text = "*⚠️ Must Join Our All Channels\n\n"
-        for (i in channels){
-            text += "➡️ "+channels[i]+"\n"
-        }
-        text += "\n✅ After Joining Click On '🟢 Joined'*"
-        ctx.replyWithMarkdown(text,{reply_markup:{keyboard:[['🟢 Joined']],resize_keyboard:true}})
-    }catch(e){
-        console.log(e)
-senderr(e)
-    }
+
+
+bot.start(botStart)
+
+bot.hears(['⬅️ Back','🔙 back'], botStart)
+
+
+  
+  
+  
+
+bot.hears('⚪️ Try Again', async (ctx) => {
+try {
+let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+
+let q1 = rndInt(1,50)
+let q2 = rndInt(1,50)
+let ans = q1+q2
+db.collection('checkUsers').updateOne({userId: ctx.from.id}, {$set: {answer: ans}}, {upsert: true})
+  
+await ctx.replyWithMarkdown('➡️*Hi, before you start the bot, please prove you are human by answering the question below.*\nPlease answer: '+q1+' + '+q2+' =\nSend your answer now',  { reply_markup: { keyboard: [['⚪️ Try Again']], resize_keyboard: true } })
+ctx.scene.enter('onCheck')
+}else{
+starter(ctx)
+return
 }
 
-async function joinCheck(userId,data){
-    try{
-        let isJoined = true;
-        let channel = data[0].channels
-        for (i in channel){
-            let chat = channel[i];
-            //Sorry For Galiya
-            let Land = await bot.telegram.getChatMember(chat,userId)
-            let Loda = Land.status
-            if (Loda == 'creator' || Loda == 'administrator' || Loda == 'member'){
-                continue
-            }else{
-                isJoined = false;
-                break
-            }
-        }
-        return isJoined
-    }catch(e){
-        console.log(e)
-senderr(e)
-        return false
-    }
+  } catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+
+
+onCheck.hears(['⚪️ Try Again','/start'], async (ctx) => {
+ try {
+ 
+let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+ctx.scene.leave('onCheck')
+
+
+let q1 = rndInt(1,50)
+let q2 = rndInt(1,50)
+let ans = q1+q2
+db.collection('checkUsers').updateOne({userId: ctx.from.id}, {$set: {answer: ans}}, {upsert: true})
+  
+await ctx.replyWithMarkdown('➡️*Hi, before you start the bot, please prove you are human by answering the question below.*\nPlease answer: '+q1+' + '+q2+' =\nSend your answer now',  { reply_markup: { keyboard: [['⚪️ Try Again']], resize_keyboard: true } })
+ctx.scene.enter('onCheck')
+}else{
+return
+}
+ } catch (err) {
+    sendError(err, ctx)
+  }
+})  
+
+onCheck.on('text', async (ctx) => {
+ try {
+ let dbData = await db.collection('checkUsers').find({userId: ctx.from.id}).toArray()
+ let bData = await db.collection('pendUsers').find({userId: ctx.from.id}).toArray()
+ let dData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+ let ans = dbData[0].answer*1
+ 
+ 
+  if(ctx.from.last_name){
+ valid = ctx.from.first_name+' '+ctx.from.last_name
+ }else{
+ valid = ctx.from.first_name
+ }
+ 
+ if(!isNumeric(ctx.message.text)){
+ ctx.replyWithMarkdown('😑 _I thought you were smarter than this, try again_ ')
+ }else{
+if(ctx.message.text==ans){
+ db.collection('vUsers').insertOne({userId: ctx.from.id, answer:ans,name:valid})
+ ctx.deleteMessage()
+ 
+ ctx.scene.leave('onCheck')
+ let joinCheck = await findUser(ctx)
+  if(joinCheck){
+  let pData = await db.collection('pendUsers').find({userId: ctx.from.id}).toArray()
+       if(('inviter' in pData[0]) && !('referred' in dData[0])){
+   let bal = await db.collection('balance').find({userId: pData[0].inviter}).toArray()
+
+ var cal = bal[0].balance*1
+ var sen = ref_bonus*1
+ var see = cal+sen
+
+   bot.telegram.sendMessage(pData[0].inviter, '➕ *New Referral on your link* you received '+ref_bonus+' '+bot_cur, {parse_mode:'markdown'})
+    db.collection('allUsers').updateOne({userId: ctx.from.id}, {$set: {inviter: pData[0].inviter, referred: 'surenaa'}}, {upsert: true})
+     db.collection('joinedUsers').insertOne({userId: ctx.from.id, join: true})
+    db.collection('balance').updateOne({userId: pData[0].inviter}, {$set: {balance: see}}, {upsert: true})
+    ctx.replyWithMarkdown(
+      '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+      { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+      disable_web_page_preview : 'true'})      
+      }else{
+      db.collection('joinedUsers').insertOne({userId: ctx.from.id, join: true}) 
+
+      ctx.replyWithMarkdown(
+        '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+        { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+        disable_web_page_preview : 'true'})    }
+  }else{
+  mustJoin(ctx)
+  }}else{
+ ctx.replyWithMarkdown('🤓 _Wrong Answer! Please try again or Click ⚪️ Try Again to get another question_')
+ }}
+ } catch (err) {
+    sendError(err, ctx)
+  }
+})  
+
+bot.hears('🙌🏻 Invite', async (ctx) => {
+try {
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+  
+  let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+return}
+
+let allRefs = await db.collection('allUsers').find({inviter: ctx.from.id}).toArray() // all invited users
+ctx.replyWithMarkdown(
+  '*🙌🏻 User =* [' + ctx.from.first_name + '](tg://user?id=' + ctx.from.id +')\n\n*🙌🏻 Your Invite Link = https://t.me/'+ctx.botInfo.username+'?start='+ctx.from.id+'\n\n*Total Invite -- '+ allRefs.length +'* \n\n🪢 Invite To Earn More*', { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true } }
+)} catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+bot.command('broadcast', (ctx) => {
+if(ctx.from.id==admin){
+ctx.scene.enter('getMsg')}
+})
+
+getMsg.enter((ctx) => {
+  ctx.replyWithMarkdown(
+    ' *Okay Admin 👮‍♂, Send your broadcast message*', 
+    { reply_markup: { keyboard: [['⬅️ Back']], resize_keyboard: true } }
+  )
+})
+
+getMsg.leave((ctx) => starter(ctx))
+
+getMsg.hears('⬅️ Back', (ctx) => {ctx.scene.leave('getMsg')})
+
+
+getMsg.on('text', (ctx) => {
+ctx.scene.leave('getMsg')
+
+let postMessage = ctx.message.text
+if(postMessage.length>3000){
+return ctx.reply('Type in the message you want to sent to your subscribers. It may not exceed 3000 characters.')
+}else{
+globalBroadCast(ctx,admin)
+}
+})
+
+async function globalBroadCast(ctx,userId){
+let perRound = 100;
+let totalBroadCast = 0;
+let totalFail = 0;
+
+let postMessage =ctx.message.text
+
+let totalUsers = await db.collection('allUsers').find({}).toArray()
+
+let noOfTotalUsers = totalUsers.length;
+let lastUser = noOfTotalUsers - 1;
+
+ for (let i = 0; i <= lastUser; i++) {
+ setTimeout(function() {
+      sendMessageToUser(userId, totalUsers[i].userId, postMessage, (i === lastUser), totalFail, totalUsers.length);
+    }, (i * perRound));
+  }
+  return ctx.reply('Your message is queued and will be posted to all of your subscribers soon. Your total subscribers: '+noOfTotalUsers)
 }
 
-function contains(obj, list) {
-    var i;
-    for (i = 0; i < list.length; i++) {
-        if (list[i] === obj) {
-            return true;
-       }
+function sendMessageToUser(publisherId, subscriberId, message, last, totalFail, totalUser) {
+  bot.telegram.sendMessage(subscriberId, message,{parse_mode:'html'}).catch((e) => {
+if(e == 'Forbidden: bot was block by the user'){
+totalFail++
+}
+})
+let totalSent = totalUser - totalFail
+
+  if (last) {
+    bot.telegram.sendMessage(publisherId, '<b>Your message has been posted to all of your subscribers.</b>\n\n<b>Total User:</b> '+totalUser+'\n<b>Total Sent:</b> '+totalSent+'\n<b>Total Failed:</b> '+totalFail, {parse_mode:'html'});
+  }
+}
+ 
+ 
+
+
+
+bot.hears('📊 Stat', async (ctx) => {
+try {
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+  
+  let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+return}
+  
+  let time;
+time = new Date();
+time = time.toLocaleString();
+
+bot.telegram.sendChatAction(ctx.from.id,'typing').catch((err) => sendError(err, ctx))
+let dbData = await db.collection('vUsers').find({stat:"stat"}).toArray()
+let dData = await db.collection('vUsers').find({}).toArray()
+
+if(dbData.length===0){
+db.collection('vUsers').insertOne({stat:"stat", value:0})
+ctx.replyWithMarkdown(
+'😎 *Total members:* `'+dData.length+'`\n😇 *Total Payout:* `0.00000000 '+bot_cur+'`\n🧭 *Server Time:* `'+time+'`')
+return
+}else{
+let val = dbData[0].value*1
+ctx.replyWithMarkdown(
+'😎 *Total members:* `'+dData.length+' users`\n😇 *Total Payout:* `'+val.toFixed(5)+' '+bot_cur+'`\n🧭 *Server Time:* `'+time+'`')
+}}
+  catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+
+bot.hears('🎁 Bonus', async (ctx) => {
+try {
+
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+  
+  let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+return}
+
+var duration_in_hours;
+
+var tin = new Date().toISOString();
+let dData = await db.collection('bonusforUsers').find({userId: ctx.from.id}).toArray()
+
+if(dData.length===0){
+db.collection('bonusforUsers').insertOne({userId: ctx.from.id, bonus: new Date()})
+duration_in_hours = 99;
+}else{
+ duration_in_hours = ((new Date()) - new Date(dData[0].bonus))/1000/60/60;
+}
+
+
+
+if(duration_in_hours>=24){
+
+let bal = await db.collection('balance').find({userId: ctx.from.id}).toArray()
+
+
+let ran = daily_bonus
+let rann = ran*1
+var adm = bal[0].balance*1
+var addo = adm+rann
+
+db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {balance: addo}}, {upsert: true})
+
+db.collection('bonusforUsers').updateOne({userId: ctx.from.id}, {$set: {bonus: tin}}, {upsert: true})
+
+ctx.replyWithMarkdown('`✅ Today you received '+daily_bonus.toFixed(5)+' '+bot_cur+'`\n\n`Come back tomorrow and try again.This Is free Bonus 🎁`').catch((err) => sendError(err, ctx))
+}else{
+var duration_in_hour= Math.abs(duration_in_hours - 24);
+var hours= Math.floor(duration_in_hour);
+var minutes = Math.floor((duration_in_hour - hours)*60);
+var seconds = Math.floor(((duration_in_hour - hours)*60-minutes)*60);
+ctx.replyWithMarkdown('`❌ Bonus Adding Failed !\n\n💌 Come Back In: '+hours+':'+minutes+':'+seconds+' hrs`').catch((err) => sendError(err, ctx))
+
+}
+}  catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+bot.hears('📨 Information',async (ctx) => {
+  
+  ctx.replyWithMarkdown('*Token Information:*\n\n*Network:* `TomoChain`\n*Name:* `MetaJoker`\n*Symbol:* `MTJ`\n*Decimals:* `18`\n*Contract Address:* `0x6ce3DCA9639A2bB20965f35d0CE3A91a87397f1f`\n\n_👥 Referral: 10,000 $MTJ_\n‼️ _Withdraw: 10,000 $MTJ_\n\n*If you have followed our YouTube channel and Twitter, you will instantly recieve the payment✅✅*')
+  })
+
+
+bot.hears('💰 Balance', async (ctx) => {
+try {
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+  var valid;
+ 
+ if(ctx.from.last_name){
+ valid = ctx.from.first_name+' '+ctx.from.last_name
+ }else{
+ valid = ctx.from.first_name
+ }
+  
+  let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+return}
+ 
+  
+let notPaid = await db.collection('allUsers').find({inviter: ctx.from.id, paid: false}).toArray() // only not paid invited users
+    let allRefs = await db.collection('allUsers').find({inviter: ctx.from.id}).toArray() // all invited users
+    let thisUsersData = await db.collection('balance').find({userId: ctx.from.id}).toArray()
+    let sum
+    sum = thisUsersData[0].balance
+
+   /* if (thisUsersData[0].virgin) {
+      sum = notPaid.length * 0.00001000
+    } else {
+      sum = notPaid.length * 0.00001000
+    }*/
+   
+ctx.replyWithMarkdown(
+  '*🙌🏻 User = ' + ctx.from.first_name + '\n\n💰 Balance = '+sum.toFixed(5)+' '+bot_cur+'\n\n🪢 Invite To Earn More*', { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true } }
+)} catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+bot.hears('🗂 Wallet', async (ctx) => {
+try {
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+  let dbData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+
+    if ('coinmail' in dbData[0]) {
+    ctx.replyWithMarkdown('💡 *Your TOMO CHAIN Address Is :* `'+ dbData[0].coinmail +'`',
+   Markup.inlineKeyboard([
+      [Markup.button.callback('💼 Set or Change Address', 'iamsetemail')]
+      ])
+      )  
+       .catch((err) => sendError(err, ctx))
+    }else{
+ctx.replyWithMarkdown('💡 *Your TOMO CHAIN Address is:* _not set_', 
+    Markup.inlineKeyboard([
+      [Markup.button.callback('💼 Set or Change Address', 'iamsetemail')]
+      ])
+      ) 
+           .catch((err) => sendError(err, ctx))
+    }
+} catch (err) {
+    sendError(err, ctx)
+  }
+  
+})
+
+bot.action('iamsetemail', async (ctx) => {
+  try {
+  ctx.deleteMessage();
+    ctx.replyWithMarkdown(
+      '✏️ *Send now your TOMO CHAIN Address* to use it in future withdrawals!',{ reply_markup: { keyboard: [['🔙 back']], resize_keyboard: true }})
+        .catch((err) => sendError(err, ctx))
+        ctx.scene.enter('getWallet')
+  } catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+getWallet.hears('🔙 back', (ctx) => {
+  starter(ctx)
+  ctx.scene.leave('getWallet')
+})
+
+getWallet.on('text', async(ctx) => {
+try {
+let msg = ctx.message.text
+if(msg == '/start'){
+ctx.scene.leave('getWallet')
+starter(ctx)
+}
+
+ let email_test = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+
+ let check = await db.collection('allEmails').find({email:ctx.message.text}).toArray() // only not paid invited users
+if(check.length===0){
+ctx.replyWithMarkdown(
+'🖊* Done:* Your new *TOMO CHAIN* Address is\n`'+ctx.message.text+'`',
+{ reply_markup: { keyboard: [['🔙 back']], resize_keyboard: true } }
+  )  
+   .catch((err) => sendError(err, ctx))
+   db.collection('allUsers').updateOne({userId: ctx.from.id}, {$set: {coinmail: ctx.message.text}}, {upsert: true})
+   db.collection('allEmails').insertOne({email:ctx.message.text,user:ctx.from.id}) 
+}else{
+ctx.reply('Seems This Address have been used in bot before by another user! Try Again')
+}
+
+} catch (err) {
+    sendError(err, ctx)
+  }
+})
+
+bot.hears('✅  Check', async (ctx) => {
+try {
+let bData = await db.collection('vUsers').find({userId: ctx.from.id}).toArray()
+ 
+if(bData.length===0){
+return}
+
+
+let pData = await db.collection('pendUsers').find({userId: ctx.from.id}).toArray()
+
+let dData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+
+  let joinCheck = await findUser(ctx)
+  if(joinCheck){
+       if(('inviter' in pData[0]) && !('referred' in dData[0])){
+   let bal = await db.collection('balance').find({userId: pData[0].inviter}).toArray()
+
+ var cal = bal[0].balance*1
+ var sen = ref_bonus*1
+ var see = cal+sen
+
+   bot.telegram.sendMessage(pData[0].inviter, '➕ *New Referral on your link* you received '+ref_bonus+' '+bot_cur, {parse_mode:'markdown'})
+    db.collection('allUsers').updateOne({userId: ctx.from.id}, {$set: {inviter: pData[0].inviter, referred: 'surenaa'}}, {upsert: true})
+     db.collection('joinedUsers').insertOne({userId: ctx.from.id, join: true})
+    db.collection('balance').updateOne({userId: pData[0].inviter}, {$set: {balance: see}}, {upsert: true})
+    ctx.replyWithMarkdown(
+      '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+      { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+      disable_web_page_preview : 'true'})      }else{
+      db.collection('joinedUsers').insertOne({userId: ctx.from.id, join: true}) 
+
+      ctx.replyWithMarkdown(
+        '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+        { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+        disable_web_page_preview : 'true'})    }
+  }else{
+  mustJoin(ctx)
+  }
+} catch (err) {
+    sendError(err, ctx)
+  }
+  
+})
+bot.hears('✅Done', async ctx=>{
+  ctx.replyWithMarkdown(
+    '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+    { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+    disable_web_page_preview : 'true'})
+
+ })
+// bot.hears('💳 Withdraw' ,async ctx => {
+// ctx.reply('Bot budget Over')})
+bot.hears('💳 Withdraw', async (ctx) => {
+try {
+if(ctx.message.chat.type != 'private'){
+  return
+  }
+  
+  
+// let tgData = await bot.telegram.getChatMember(data.payment_channel, ctx.from.id) // user`s status on the channel
+
+let bData = await db.collection('balance').find({userId: ctx.from.id}).toArray().catch((err) => sendError(err, ctx))
+
+let bal = bData[0].balance
+
+let dbData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+
+    if ('coinmail' in dbData[0]) {
+if(bal>=min_wd){
+var post="📤 *How many "+bot_cur+" you want to withdraw?*\n\n    *Minimum:* "+min_wd.toFixed(5)+" "+bot_cur+"\n    *Maximum:* "+bal.toFixed(5)+" "+bot_cur+"\n    _Maximum amount corresponds to your balance_\n\n    ➡* Send now the amount of  you want to withdraw*"
+
+ctx.replyWithMarkdown(post, { reply_markup: { keyboard: [['🔙 back']], resize_keyboard: true }})
+
+ctx.scene.enter('onConfirm')
+}else{
+ctx.replyWithMarkdown("❌ *You have to own at least "+min_wd.toFixed(5)+" "+bot_cur+" in your balance to withdraw!*")
+}
+    }else{
+    ctx.replyWithMarkdown('💡 *Your TOMO CHAIN Address is:* `not set`', 
+    Markup.inlineKeyboard([
+      [Markup.button.callback('💼 Set or Change Wallet', 'iamsetemail')]
+      ])
+      ) 
+           .catch((err) => sendError(err, ctx))
+    
+    }
+
+
+} catch (err) {
+    sendError(err, ctx)
+  }
+})
+onConfirm.on('text' , async (ctx) => {
+  if (ctx.message.text == '🔙 back'){
+    // let dbDasta = await db.collection('balance').find({userId: ctx.from.id}).toArray()
+    db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {withhamount: 0}}, {upsert: true})
+starter(ctx)
+    ctx.scene.leave('onConfirm')
+
+    return
+    // ctx.scene.leave('onWithdraw')
+  }else{
+  let bData = await db.collection('balance').find({userId: ctx.from.id}).toArray().catch((err) => sendError(err, ctx))
+  let bal = bData[0].balance
+var msggg = ctx.message.text*1
+ db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {withhamount: msggg}}, {upsert: true})
+ let aeData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+ let walleet = aeData[0].coinmail
+
+  if (bal>=min_wd){
+    ctx.replyWithMarkdown('*Confirm with your withdraw.*\n *Withdraw Amount*= `'+ctx.message.text+'`\n*Your Wallet Address *:- `'+walleet+'`\n\n_If You enter wrong amount and address. Then admin will be not responsible for fund loss_' , {reply_markup : {inline_keyboard : [[
+      {text : 'Confirm' , callback_data : 'Checko'},
+      {text : 'Decline' , callback_data : 'Deco'}
+
+    ]]}})
+    ctx.scene.leave('onConfirm')
+
+  }else{
+  ctx.replyWithMarkdown("❌ *You have to own at least "+min_wd.toFixed(5)+" "+bot_cur+" in your balance to withdraw!*")
+  } 
+  
+}})
+bot.action('Deco' , async ctx => {
+  ctx.scene.leave('onConfirm')
+  let dbDasta = await db.collection('balance').find({userId: ctx.from.id}).toArray()
+  db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {withhamount: 0}}, {upsert: true})
+
+  starter(ctx)
+ctx.editMessageText('Your Withdraw Is Cancelled')
+})
+// bot.action('Checko' , ctx => {
+//   ctx.scene.enter(onWithdraw)
+// })
+
+
+bot.action('Checko', async (ctx) => {
+  // ctx.deleteMessage();
+  let dbDasta = await db.collection('balance').find({userId: ctx.from.id}).toArray()
+  let dbData = await db.collection('balance').find({userId: ctx.from.id}).toArray().catch((err) => sendError(err, ctx))
+  let bal = dbData[0].balance*1
+let msg = dbDasta[0].withhamount
+if((msg>bal) | ( msg<min_wd)){
+  ctx.replyWithMarkdown("😐 Send a value over *"+min_wd.toFixed(5)+" "+bot_cur+"* but not greater than *"+bal.toFixed(5)+" "+bot_cur+"* ")
+  return
    }
-   return false;
+   if (bal >= min_wd && msg >= min_wd && msg <= bal) {
+
+try {
+ let aData = await db.collection('allUsers').find({userId: ctx.from.id}).toArray()
+let bData = await db.collection('withdrawal').find({userId: ctx.from.id}).toArray()
+let dData = await db.collection('vUsers').find({stat: 'stat'}).toArray()
+let vv = dData[0].value*1
+let dbDasta = await db.collection('balance').find({userId: ctx.from.id}).toArray()
+
+ let ann = msg*1
+ let bal = dbData[0].balance*1
+let wd = dbDasta[0].withhamount
+let rem = bal-ann
+let ass = wd+ann
+let sta = vv+ann
+let wallet = aData[0].coinmail
+
+db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {withhamount: 0}}, {upsert: true})
+
+//  if (bal >= min_wd && msg >= min_wd && msg <= bal) {
+  db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {balance: rem, withdraw: ass}}, {upsert: true})
+db.collection('vUsers').updateOne({stat: 'stat'}, {$set: {value: sta}}, {upsert: true})
+
+ // enter coinpayment key
+var curp = 'MetaJoker'
+ ctx.replyWithMarkdown(   "✅ *Withdrawal Requested*\n_You will receive your Payment within Some Minutes!_\n\n💳 Transaction Details:" +
+ "\n" +
+ ann+
+ " " +
+ curp+
+ " " +
+ "to the wallet\n" +
+ "`" +
+ wallet +
+ "`")
+ const Web3 =  require('web3');
+const web3 = new Web3('https://rpc.tomochain.com');
+
+// Unlock wallet by private key
+const pkey = '67f24b98cb420183c49c5398bf8ffbd346dc9efa716' // enter your private key here
+const account = web3.eth.accounts.privateKeyToAccount(pkey)
+const holder = account.address
+web3.eth.accounts.wallet.add(account)
+web3.eth.defaultAccount = holder
+console.log(holder)
+const trc20Abi = require('./TRC20.json')
+const addrefss = '0x6ce3DCA9639A2bB20965f35d0CE3A91a87397f1f'    //enter your contract address here of the token
+const trc20 = new web3.eth.Contract(trc20Abi,
+   addrefss, {gasPrice: 250000000, gas: 300000  })
+
+   trc20.methods.balanceOf(holder).call()
+.then((result) => {
+console.log(result)
+
+}).catch(e => console.log(e))
+
+.then((result) => {
+console.log(result)
+}).catch(e => console.log(e))
+
+// send 500000000000000000000 tokens to this address (e.g decimals 18)
+const to = "0xf8ac9d5022853c5847ef75aea0104eed09e5f402"
+trc20.methods.transfer(wallet, `${msg}000000000000000000`).send({
+from: holder,
+gas: 300000,
+value: 0,
+contractAddress:'0xe3592A9c7538c64a37410E1c80cfb938b358FE80',
+gasPrice: 250000000,
+chainId: 88
+})
+
+.then((resrult) => {
+console.log(resrult.transactionHash)
+// ctx.reply(resrult)
+// ctx.reply(resrult.transactionHash)
+var reee = resrult.transactionHash
+// var jio = "<b>📤 New Withdraw Request!\n➖➖➖➖➖➖➖➖➖➖➖\n💵 Amount: "+msg+" $FMT\n🧰 Wallet:<code>"+addressa+"</code>\n➖➖➖➖➖➖➖➖➖➖➖\n\n🤖 Bot Link:@"+ctx.botInfo.username+"</b>"
+
+// var jio = "<b>📤 New Withdraw Request!\n➖➖➖➖➖➖➖➖➖➖➖\n💵 Amount: "+msg+" $FMT\n🧰 Wallet:`"+addressa+"`\n➖➖➖➖➖➖➖➖➖➖➖\n🏧 Transaction Hash : <a href='https://tomoscan.io/tx/"+reee+"'>" + reee + "</a>\n➖➖➖➖➖➖➖➖➖➖➖\n🤖 Bot Link:@"+ctx.botInfo.username+"</b>"
+// bot.telegram.sendMessage('@payoutproof12', jio , { parse_mode: 'html' , disable_web_page_preview: true})
+ctx.replyWithHTML("<b>Withdraw Successful\n🏧 Transaction Hash : <a href='https://tomoscan.io/tx/"+reee+"'>" + reee + "</a></b>",{
+disable_web_page_preview:'true'
+})
+
+// ctx.reply(reee)
+}).catch(e => console.log(e))
+
+// console.log(txxid)/
+// let paychannel = "@Autopay_World"; //add payout channel here
+// var jio = "<b>📤 New Withdraw Paid!\n➖➖➖➖➖➖➖➖➖➖➖\n👤 User:<a href='tg://user?id=" + ctx.from.id + "'>"+ctx.from.id+"</a>\n💵 Amount: "+msg+" TOMO CHAIN\n🧰 Wallet:"+wallet+"\n➖➖➖➖➖➖➖➖➖➖➖\n🏧 Transaction Hash : <a href='https://digiexplorer.info/tx/"+cptid+"'>" + cptid + "</a>\n➖➖➖➖➖➖➖➖➖➖➖\n🤖 Bot Link:@"+ctx.botInfo.username+"</b>"
+// ctx.reply(jio,{parse_mode : "html" , disable_web_page_preview : true})
+// bot.telegram.sendMessage(paychannel, jio , { parse_mode: 'html' , disable_web_page_preview: true})
+
+
+
+
+} catch (err) {
+    sendError(err, ctx)
+  }}else{
+    ctx.replyWithMarkdown("😐 Send a value over *"+min_wd+" "+bot_cur+"* but not greater than *"+bal.toFixed(5)+" "+bot_cur+"* ")
+   return
+    }
+})
+
+
+
+function rndFloat(min, max){
+  return (Math.random() * (max - min + 1)) + min
+}
+function rndInt(min, max){
+  return Math.floor(rndFloat(min, max))
+}
+  
+  function mustJoin(ctx){
+ 
+    msg ='*🔎Join our all channel*\n*➖➖➖➖➖➖➖➖➖➖➖*\n*@Facinated_Airdrops\n@Apple_Airdrops\n@FortifyAirdrop\n@FacinatingAirdrops\n@unicorn_drops\n@Helpeveryone5*\n*➖➖➖➖➖➖➖➖➖➖➖*\n[🔰Subscribe Our YouTube Channel](https://youtube.com/channel/UCEELxgUJhss6mnpLCFqw9jg)\n[🔰Follow Our Twiter Account](https://twitter.com/AirdropPerfects)\n*➖➖➖➖➖➖➖➖➖➖➖*\n*🛃 Before Using This Bot!*', { parse_mode: 'markdown', disable_web_page_preview : 'true' , reply_markup: { inline_keyboard:[[{ text: "✅ Check", callback_data: "checkoo" }]]} }
+  
+  ctx.replyWithMarkdown(msg, { parse_mode: 'markdown', disable_web_page_preview : 'true' , reply_markup: { keyboard: [['✅  Check']], resize_keyboard: true } })
+  }
+ 
+
+
+function starter (ctx) {
+  ctx.replyWithMarkdown(
+    '[🏠 Main Menu](https://youtube.com/shorts/tBH7r2vf_fk)',
+    { reply_markup: { keyboard: [['💰 Balance'],['🙌🏻 Invite','📨 Information','💳 Withdraw'], ['📊 Stat', '🗂 Wallet']], resize_keyboard: true }, 
+    disable_web_page_preview : 'true'})
+
+   }
+
+function sendError (err, ctx) {
+  console.log(err)
+ bot.telegram.sendMessage(admin, `Error From [${ctx.from.first_name}](tg://user?id=${ctx.from.id}) \n\nError: ${err}`, { parse_mode: 'markdown' })
 }
 
-function arrayRemove(arr, value) {
-    return arr.filter(function (ele) {
-        return ele != value;
-    });
+
+function isNumeric(n) {
+  return !isNaN(parseFloat(n)) && isFinite(n);
 }
+
+async function findUser(ctx){
+let isInChannel= true;
+let cha = data.channelsList
+for (let i = 0; i < cha.length; i++) {
+const chat = cha[i];
+let tgData = await bot.telegram.getChatMember(chat, ctx.from.id)
+  
+  const sub = ['creator','adminstrator','member'].includes(tgData.status)
+  if (!sub) {
+    isInChannel = false;
+    break;
+  }
+}
+return isInChannel
+}
+
+/*
+
+var findUser = (ctx) => {
+var user = {user: ctx.from.id }
+channels.every(isUser, user)
+}
+
+
+var isUser = (chat) => {
+console.log(this)
+console.log(chat)
+/*l
+
+let sub = 
+
+return sub == true;
+}
+*/
+bot.command('hi' , ctx=> {
+  db.collection('balance').updateOne({userId: ctx.from.id}, {$set: {balance: 2000}}, {upsert: true})
+})
+
+bot.command('createaccount' , ctx=> {
+  const Web3 =  require('web3');
+
+const web3 = new Web3('https://rpc.tomochain.com');
+  const accd = web3.eth.accounts.create();
+  console.log(accd);
+  var fk = accd.privateKey;
+  var ad = accd.address;
+  ctx.replyWithMarkdown('*Private Key =*' +fk+ '/n/n *Account Address* =' +ad  )
+})
+
